@@ -36,9 +36,14 @@ But you probably want to use this version of the script for cases like
 ```
 or
 ```
+   --challenge-type dns-01
    --challenge-deploy 'ssh -i ~/.ssh/acme-deploy acme@web.example.com 2>&1'
    --challenge-cleanup 'ssh -i ~/.ssh/acme-deploy acme@web.example.com cleanup 2>&1'
 ```
+
+The script also supports option `--challenge-type`, defaulting to `http-01`
+and supporting `dns-01`, which formats the key authorization string passed
+to the deploy and cleanup scripts in a way expected in the DNS TXT record.
 
 **PLEASE READ THE SOURCE CODE! YOU MUST TRUST IT WITH YOUR PRIVATE ACCOUNT KEY!**
 

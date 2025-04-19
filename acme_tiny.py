@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.StreamHandler())
 LOGGER.setLevel(logging.INFO)
 
-def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check=False, directory_url=DEFAULT_DIRECTORY_URL, contact=None, check_port=None, challenge_deploy=None, challenge_cleanup=None):
+def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check=False, directory_url=DEFAULT_DIRECTORY_URL, contact=None, check_port=None, challenge_type='http-01', challenge_deploy=None, challenge_cleanup=None):
     directory, acct_headers, alg, jwk = None, None, None, None # global variables
 
     # helper functions - base64 encode for jose spec
@@ -131,10 +131,12 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check
             continue
         log.info("Verifying {0}...".format(domain))
 
-        # find the http-01 challenge
-        challenge = [c for c in authorization['challenges'] if c['type'] == "http-01"][0]
+        # find the requested challenge
+        challenge = [c for c in authorization['challenges'] if c['type'] == challenge_type][0]
         token = re.sub(r"[^A-Za-z0-9_\-]", "_", challenge['token'])
         keyauthorization = "{0}.{1}".format(token, thumbprint)
+        if challenge_type == 'dns-01':
+            keyauthorization = _b64(hashlib.sha256(keyauthorization.encode()).digest())
         wellknown_path = os.path.join(acme_dir, token) if acme_dir else None
         cmd_input = "{0} {1} {2}\n".format(domain, token, keyauthorization).encode('utf8')
         if wellknown_path:
@@ -191,6 +193,7 @@ def main(argv=None):
     parser.add_argument("--account-key", required=True, help="path to your Let's Encrypt account private key")
     parser.add_argument("--csr", required=True, help="path to your certificate signing request")
     parser.add_argument("--acme-dir", help="path to the .well-known/acme-challenge/ directory")
+    parser.add_argument("--challenge-type", default="http-01", help="http-01 (default) or dns-01, specifying the key authorization value format")
     parser.add_argument("--challenge-deploy", help="script which gets called to expose the key authorization in webserver")
     parser.add_argument("--challenge-cleanup", help="script to cleanup the exposed key authorization")
     parser.add_argument("--quiet", action="store_const", const=logging.ERROR, help="suppress output except for errors")
@@ -204,7 +207,7 @@ def main(argv=None):
     if not (args.acme_dir or args.challenge_deploy):
         parser.error('Specify at least --acme-dir or --challenge-deploy')
     LOGGER.setLevel(args.quiet or LOGGER.level)
-    signed_crt = get_crt(args.account_key, args.csr, args.acme_dir, log=LOGGER, CA=args.ca, disable_check=args.disable_check, directory_url=args.directory_url, contact=args.contact, check_port=args.check_port, challenge_deploy=args.challenge_deploy, challenge_cleanup=args.challenge_cleanup)
+    signed_crt = get_crt(args.account_key, args.csr, args.acme_dir, log=LOGGER, CA=args.ca, disable_check=args.disable_check, directory_url=args.directory_url, contact=args.contact, check_port=args.check_port, challenge_deploy=args.challenge_deploy, challenge_cleanup=args.challenge_cleanup, challenge_type=args.challenge_type)
     sys.stdout.write(signed_crt)
 
 if __name__ == "__main__": # pragma: no cover
