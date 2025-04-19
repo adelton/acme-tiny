@@ -25,7 +25,11 @@ The rough equivalent of the
 behaviour can thus be achieved with
 ```
    --challenge-deploy 'read d t ka ; echo "$ka" > /var/www/acme-challenges/"$t"'
+   --challenge-cleanup 'read d t ka ; rm -f /var/www/acme-challenges/"$t"'
 ```
+There is also a `--challenge-cleanup` counterpart, run with the same input
+after the authorization passed and the challenge material is no longer needed.
+
 But you probably want to use this version of the script for cases like
 ```
    --challenge-deploy /usr/local/bin/acme-challenge-deploy
@@ -33,6 +37,7 @@ But you probably want to use this version of the script for cases like
 or
 ```
    --challenge-deploy 'ssh -i ~/.ssh/acme-deploy acme@web.example.com 2>&1'
+   --challenge-cleanup 'ssh -i ~/.ssh/acme-deploy acme@web.example.com cleanup 2>&1'
 ```
 
 **PLEASE READ THE SOURCE CODE! YOU MUST TRUST IT WITH YOUR PRIVATE ACCOUNT KEY!**

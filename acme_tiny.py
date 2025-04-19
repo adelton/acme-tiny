@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.StreamHandler())
 LOGGER.setLevel(logging.INFO)
 
-def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check=False, directory_url=DEFAULT_DIRECTORY_URL, contact=None, check_port=None, challenge_deploy=None):
+def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check=False, directory_url=DEFAULT_DIRECTORY_URL, contact=None, check_port=None, challenge_deploy=None, challenge_cleanup=None):
     directory, acct_headers, alg, jwk = None, None, None, None # global variables
 
     # helper functions - base64 encode for jose spec
@@ -136,6 +136,7 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check
         token = re.sub(r"[^A-Za-z0-9_\-]", "_", challenge['token'])
         keyauthorization = "{0}.{1}".format(token, thumbprint)
         wellknown_path = os.path.join(acme_dir, token) if acme_dir else None
+        cmd_input = "{0} {1} {2}\n".format(domain, token, keyauthorization).encode('utf8')
         if wellknown_path:
             with open(wellknown_path, "w") as wellknown_file:
                 wellknown_file.write(keyauthorization)
@@ -147,8 +148,7 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check
                 raise ValueError("Wrote file to {0}, but couldn't download {1}: {2}".format(wellknown_path, wellknown_url, e))
         if challenge_deploy:
             log.info("Running {0}...".format(challenge_deploy))
-            out = _cmd(challenge_deploy, stdin=subprocess.PIPE, cmd_input="{0} {1} {2}\n".format(domain, token, keyauthorization).encode('utf8'),
-                shell=True, err_msg="Error storing key authorization for {0}".format(domain))
+            out = _cmd(challenge_deploy, stdin=subprocess.PIPE, cmd_input=cmd_input, shell=True, err_msg="Error storing key authorization for {0}".format(domain))
             log.info(("Finished with {0}" if out else "Finished.").format(out.decode('utf8')))
 
         # say the challenge is done
@@ -158,6 +158,8 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check
             raise ValueError("Challenge did not pass for {0}: {1}".format(domain, authorization))
         if wellknown_path:
             os.remove(wellknown_path)
+        if challenge_cleanup:
+            _cmd(challenge_cleanup, stdin=subprocess.PIPE, cmd_input=cmd_input, shell=True, err_msg="Error cleaning up the key authorization for {0}".format(domain))
         log.info("{0} verified!".format(domain))
 
     # finalize the order with the csr
@@ -190,6 +192,7 @@ def main(argv=None):
     parser.add_argument("--csr", required=True, help="path to your certificate signing request")
     parser.add_argument("--acme-dir", help="path to the .well-known/acme-challenge/ directory")
     parser.add_argument("--challenge-deploy", help="script which gets called to expose the key authorization in webserver")
+    parser.add_argument("--challenge-cleanup", help="script to cleanup the exposed key authorization")
     parser.add_argument("--quiet", action="store_const", const=logging.ERROR, help="suppress output except for errors")
     parser.add_argument("--disable-check", default=False, action="store_true", help="disable checking if the challenge file is hosted correctly before telling the CA")
     parser.add_argument("--directory-url", default=DEFAULT_DIRECTORY_URL, help="certificate authority directory url, default is Let's Encrypt")
@@ -201,7 +204,7 @@ def main(argv=None):
     if not (args.acme_dir or args.challenge_deploy):
         parser.error('Specify at least --acme-dir or --challenge-deploy')
     LOGGER.setLevel(args.quiet or LOGGER.level)
-    signed_crt = get_crt(args.account_key, args.csr, args.acme_dir, log=LOGGER, CA=args.ca, disable_check=args.disable_check, directory_url=args.directory_url, contact=args.contact, check_port=args.check_port, challenge_deploy=args.challenge_deploy)
+    signed_crt = get_crt(args.account_key, args.csr, args.acme_dir, log=LOGGER, CA=args.ca, disable_check=args.disable_check, directory_url=args.directory_url, contact=args.contact, check_port=args.check_port, challenge_deploy=args.challenge_deploy, challenge_cleanup=args.challenge_cleanup)
     sys.stdout.write(signed_crt)
 
 if __name__ == "__main__": # pragma: no cover
